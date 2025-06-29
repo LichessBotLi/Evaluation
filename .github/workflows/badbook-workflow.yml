@@ -1,0 +1,42 @@
+name: Generate Bad Book from Optimus2502
+
+on:
+  workflow_dispatch:
+
+jobs:
+  make-bad-book:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3 python3-pip unzip curl
+
+      - name: Install python-chess
+        run: pip3 install chess
+
+      - name: Download Stockfish 17.1
+        run: |
+          curl -L -o stockfish.zip https://stockfishchess.org/files/stockfish-ubuntu-x86-64-avx2.zip
+          unzip stockfish.zip
+          mv stockfish/*/stockfish ./stockfish
+          chmod +x stockfish
+
+      - name: Download make-book
+        run: |
+          curl -L -o make-book https://github.com/mcostalba/Stockfish/raw/master/src/make-book
+          chmod +x make-book
+
+      - name: Run bad book generator
+        run: python3 filter_bad_games.py
+
+      - name: Create badbook.bin
+        run: ./make-book bad_games.pgn badbook.bin
+
+      - name: Upload badbook.bin
+        uses: actions/upload-artifact@v3
+        with:
+          name: badbook
+          path: badbook.bin
