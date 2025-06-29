@@ -1,23 +1,22 @@
 import chess
 import chess.engine
 import chess.pgn
-import os
 
-STOCKFISH = "./stockfish"
-POLYGLOT  = "./polyglot"
-BOOK      = "./Optimus2502.bin"
+STOCKFISH = "./stockfish"          # installed via apt
+POLYGLOT  = "./polyglot"           # downloaded in workflow
+BOOK      = "./Optimus2502.bin"    # keep in repo root
 OUTPGN    = "bad_games.pgn"
 
 def play_game():
     board = chess.Board()
-    game = chess.pgn.Game()
-    node = game
+    game  = chess.pgn.Game()
+    node  = game
 
-    # engine1 uses the book via Polyglot wrapper
+    # Engine 1 = Stockfish with Optimus book via Polyglot
     engine1_cmd = [POLYGLOT, "-e", STOCKFISH, "-b", BOOK]
     engine1 = chess.engine.SimpleEngine.popen_uci(engine1_cmd)
 
-    # engine2 is plain Stockfish without book
+    # Engine 2 = plain Stockfish (no book)
     engine2 = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
 
     engines = [engine1, engine2]
@@ -34,17 +33,19 @@ def play_game():
 
     result = board.result()
     game.headers["Result"] = result
-    game.headers["White"] = "BookSide"
-    game.headers["Black"] = "NoBook"
-    return game if result == "0-1" else None  # Only save if book side (White) loses
+    game.headers["White"]  = "BookSide"
+    game.headers["Black"]  = "NoBook"
+    return game if result == "0-1" else None   # save only if book side loses
 
 def main():
+    saved = 0
     with open(OUTPGN, "w") as f:
-        for _ in range(50):  # Play 50 games
-            game = play_game()
-            if game:
-                f.write(str(game) + "\n\n")
-                print("Saved a bad game.")
+        for _ in range(50):          # play 50 games
+            g = play_game()
+            if g:
+                f.write(str(g) + "\n\n")
+                saved += 1
+    print(f"Bad games saved: {saved}")
 
 if __name__ == "__main__":
     main()
