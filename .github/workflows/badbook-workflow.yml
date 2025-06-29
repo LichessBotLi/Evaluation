@@ -6,6 +6,7 @@ on:
 jobs:
   test_book:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -13,25 +14,24 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: "3.x"
 
-      - name: Install python-chess
+      - name: Install Python deps
         run: pip install chess
 
-      - name: Download Stockfish
+      - name: Install Stockfish
         run: |
-          mkdir sf
-          wget https://github.com/official-stockfish/Stockfish/releases/download/sf_17/stockfish-ubuntu-x86-64-avx2 -O ./sf/stockfish
-          chmod +x ./sf/stockfish
+          sudo apt-get update
+          sudo apt-get install -y stockfish
+          ln -s $(which stockfish) ./stockfish   # ./stockfish path for script
 
-      - name: Upload your Optimus book
+      - name: Place Optimus book
         run: |
-          mkdir books
-          curl -LJO "https://github.com/${{ github.repository }}/raw/main/Optimus2502.bin"
-          mv Optimus2502.bin books/book.bin
+          mkdir -p books
+          cp Optimus2502.bin books/book.bin      # file already in repo
 
       - name: Evaluate Book Games
-        run: python3 filter_bad_games.py
+        run: python3 filter_bad_games.py         # your script name
 
       - name: Upload PGN of bad games
         uses: actions/upload-artifact@v4
