@@ -1,46 +1,42 @@
-name: Evaluate Book
+name: Evaluate Opening Book
 
 on:
   workflow_dispatch:
 
 jobs:
-  test_book:
+  evaluate:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Get your repo
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Python
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      # 3. python-chess
-      - name: Install python-chess
-        run: pip install chess
-
-      # 4. Stockfish from Ubuntu repo
-      - name: Install Stockfish
+      - name: Download Stockfish
         run: |
-          sudo apt-get update
-          sudo apt-get install -y stockfish
-          ln -s "$(which stockfish)" ./stockfish   # makes ./stockfish path for script
+          curl -L -o stockfish.zip https://stockfishchess.org/files/stockfish_16.1_linux_x64_avx2.zip
+          unzip -j stockfish.zip
+          chmod +x stockfish
 
-      # 5. Check the book is present
-      - name: Ensure Optimus book exists
+      - name: Download Polyglot
+        run: sudo apt-get install -y polyglot
+
+      - name: Install cutechess-cli
+        run: sudo apt-get install -y cutechess-cli
+
+      - name: Run matches with cutechess-cli
         run: |
-          test -f Optimus2502.bin || { echo "Optimus2502.bin missing!"; exit 1; }
+          cutechess-cli \
+            -engine name=SFBook cmd=polyglot dir=. option="Engine ./stockfish" option="BookFile Optimus2502.bin" \
+            -engine name=SFPlain cmd=./stockfish \
+            -each tc=40/0.05 \
+            -games 50 \
+            -pgnout all_games.pgn
 
-      # 6. Run the evaluation script
-      - name: Evaluate Book (find bad games)
+      - name: Filter bad games from PGN
         run: python3 filter_bad_games.py
 
-      # 7. Upload the bad-game PGN
-      - name: Upload PGN of bad games
+      - name: Upload bad PGN file
         uses: actions/upload-artifact@v4
         with:
-          name: bad_games
+          name: bad-pgn
           path: bad_games.pgn
