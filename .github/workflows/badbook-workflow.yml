@@ -8,31 +8,43 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ─────────────────────────────────────────────
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # ─────────────────────────────────────────────
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
+      # ─────────────────────────────────────────────
       - name: Install Python deps
         run: pip install chess
 
+      # ─────────────────────────────────────────────
       - name: Install Stockfish
         run: |
           sudo apt-get update
           sudo apt-get install -y stockfish
-          ln -s $(which stockfish) ./stockfish   # ./stockfish path for script
+          ln -s $(which stockfish) ./stockfish   # create ./stockfish for script
 
-      - name: Place Optimus book
+      # ─────────────────────────────────────────────
+      - name: Download Polyglot adapter
         run: |
-          mkdir -p books
-          cp Optimus2502.bin books/book.bin      # file already in repo
+          wget https://github.com/dkappe/polyglot/releases/download/rel-1.05.2/polyglot-linux-x86_64 -O polyglot
+          chmod +x polyglot
 
+      # ─────────────────────────────────────────────
+      - name: Ensure Optimus book is present
+        run: |
+          ls -l Optimus2502.bin || { echo "Optimus2502.bin missing!"; exit 1; }
+
+      # ─────────────────────────────────────────────
       - name: Evaluate Book Games
-        run: python3 filter_bad_games.py         # your script name
+        run: python3 filter_bad_games.py
 
+      # ─────────────────────────────────────────────
       - name: Upload PGN of bad games
         uses: actions/upload-artifact@v4
         with:
