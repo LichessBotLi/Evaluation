@@ -4,15 +4,20 @@ import chess.pgn
 import os
 
 STOCKFISH = "./stockfish"
-BOOK = "./Optimus2502.bin"
-OUTPGN = "bad_games.pgn"
+POLYGLOT  = "./polyglot"
+BOOK      = "./Optimus2502.bin"
+OUTPGN    = "bad_games.pgn"
 
 def play_game():
     board = chess.Board()
     game = chess.pgn.Game()
     node = game
 
-    engine1 = chess.engine.SimpleEngine.popen_uci([STOCKFISH, f"option.UseBook=true", f"option.BookFile={BOOK}"])
+    # engine1 uses the book via Polyglot wrapper
+    engine1_cmd = [POLYGLOT, "-e", STOCKFISH, "-b", BOOK]
+    engine1 = chess.engine.SimpleEngine.popen_uci(engine1_cmd)
+
+    # engine2 is plain Stockfish without book
     engine2 = chess.engine.SimpleEngine.popen_uci(STOCKFISH)
 
     engines = [engine1, engine2]
@@ -31,11 +36,11 @@ def play_game():
     game.headers["Result"] = result
     game.headers["White"] = "BookSide"
     game.headers["Black"] = "NoBook"
-    return game if result == "0-1" else None  # Book side lost
+    return game if result == "0-1" else None  # Only save if book side (White) loses
 
 def main():
     with open(OUTPGN, "w") as f:
-        for _ in range(50):  # Try 50 games
+        for _ in range(50):  # Play 50 games
             game = play_game()
             if game:
                 f.write(str(game) + "\n\n")
