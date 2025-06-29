@@ -4,39 +4,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  make-bad-book:
+  build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y python3 python3-pip unzip curl
+        run: sudo apt update && sudo apt install -y python3-pip stockfish
 
-      - name: Install python-chess
-        run: pip3 install chess
-
-      - name: Download Stockfish 17.1
+      - name: Download Stockfish
         run: |
-          curl -L -o stockfish.zip https://stockfishchess.org/files/stockfish-ubuntu-x86-64-avx2.zip
-          unzip stockfish.zip
-          mv stockfish/*/stockfish ./stockfish
-          chmod +x stockfish
+          wget https://stockfishchess.org/files/stockfish-ubuntu-x86-64-avx2.zip
+          unzip stockfish-ubuntu-x86-64-avx2.zip
+          mv stockfish/* ./sf
+          chmod +x ./sf
 
-      - name: Download make-book
-        run: |
-          curl -L -o make-book https://github.com/mcostalba/Stockfish/raw/master/src/make-book
-          chmod +x make-book
-
-      - name: Run bad book generator
+      - name: Run filter script
         run: python3 filter_bad_games.py
 
-      - name: Create badbook.bin
-        run: ./make-book bad_games.pgn badbook.bin
-
-      - name: Upload badbook.bin
-        uses: actions/upload-artifact@v3
+      - name: Upload result book
+        uses: actions/upload-artifact@v4
         with:
           name: badbook
           path: badbook.bin
