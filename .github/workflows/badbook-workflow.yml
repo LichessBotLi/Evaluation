@@ -1,4 +1,4 @@
-name: Export PGN from Book
+name: Export Full PGNs from Book
 
 on:
   workflow_dispatch:
@@ -30,7 +30,6 @@ jobs:
 
           BIN = pathlib.Path("Optimus2502.bin")
           PGN = pathlib.Path("Optimus2502.pgn")
-          MAX_DEPTH = 12  # Max number of half-moves (6 full moves)
 
           if not BIN.is_file():
               sys.exit(f"❌ {BIN} not found in repo root.")
@@ -42,7 +41,8 @@ jobs:
               while stack:
                   board, line = stack.pop()
 
-                  if len(line) >= MAX_DEPTH or not list(reader.find_all(board)):
+                  entries = list(reader.find_all(board))
+                  if not entries:
                       game = chess.pgn.Game()
                       node = game
                       for mv in line:
@@ -50,13 +50,13 @@ jobs:
                       print(game, file=out, end="\n\n")
                       continue
 
-                  for entry in list(reader.find_all(board))[::-1]:
+                  for entry in entries[::-1]:
                       mv = entry.move
                       board.push(mv)
                       stack.append((board.copy(stack=False), line + [mv]))
                       board.pop()
 
-          print(f"✅ Wrote PGNs (up to {MAX_DEPTH} plies) to {PGN}")
+          print(f"✅ Wrote complete PGNs to {PGN}")
           EOF
 
       - name: Run PGN extraction
@@ -65,5 +65,5 @@ jobs:
       - name: Upload PGN artifact
         uses: actions/upload-artifact@v4
         with:
-          name: optimus2502-pgn
+          name: optimus2502-full-pgn
           path: Optimus2502.pgn
