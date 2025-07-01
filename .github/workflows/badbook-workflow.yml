@@ -1,49 +1,39 @@
-# .github/workflows/bin-to-pgn.yml
-name: Dump Optimus2502.bin to PGN
+name: Build and Convert Polyglot Book
 
 on:
-  push:
-    paths:
-      - Optimus2502.bin        # rebuild only when the book itself changes
-  workflow_dispatch:           # …or when you click “Run workflow”
+  workflow_dispatch:
 
 jobs:
-  convert:
+  build-convert:
     runs-on: ubuntu-latest
 
     steps:
-    ## 1 ▸ Check out your repo
-    - uses: actions/checkout@v4
+    - name: Checkout your repo
+      uses: actions/checkout@v3
 
-    ## 2 ▸ Install tool-chain and autotools helpers
-    - name: Install build tools
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential git autoconf automake
+        sudo apt-get install -y build-essential autoconf automake libtool
 
-    ## 3 ▸ Clone PolyGlot
-    - name: Clone PolyGlot source
+    - name: Clone and build Polyglot
       run: |
-        git clone --depth 1 https://github.com/ddugovic/polyglot.git "$HOME/polyglot"
-
-    ## 4 ▸ Configure & build (creates Makefile, then compiles)
-    - name: Build PolyGlot
-      run: |
+        git clone https://github.com/ddugovic/polyglot.git "$HOME/polyglot"
         cd "$HOME/polyglot"
-        ./configure        # generates Makefile ➜ required! 0
-        make -j"$(nproc)"
+        autoreconf -fi
+        ./configure
+        make
 
-    ## 5 ▸ Dump White & Black repertoires and merge them
-    - name: Convert .bin to .pgn
+    - name: Convert Optimus2502.bin to PGN
       run: |
-        BIN_IN="Optimus2502.bin"
-        PGN_OUT="Optimus2502.pgn"
-        "$HOME/polyglot/polyglot" book dump -bin "$BIN_IN" -color white -out white.pgn
-        "$HOME/polyglot/polyglot" book dump -bin "$BIN_IN" -color black -out black.pgn
-        cat white.pgn black.pgn > "$PGN_OUT"
+        mkdir -p converted
+        "$HOME/polyglot/polyglot" \
+          --binbook Optimus2502.bin \
+          --pgnout converted/Optimus2502.pgn \
+          --reverse
 
-    ## 6 ▸ Publish the PGN
-    - uses: actions/upload-artifact@v4
+    - name: Upload PGN file
+      uses: actions/upload-artifact@v3
       with:
-        name: Optimus2502_PGN
-        path: Optimus2502.pgn
+        name: Optimus2502.pgn
+        path: converted/Optimus2502.pgn
