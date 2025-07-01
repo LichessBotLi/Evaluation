@@ -1,39 +1,69 @@
-name: Build and Convert Polyglot Book
+name: Convert Optimus2502.bin to PGN
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:        # click “Run workflow” from the Actions tab
+  push:
+    paths:
+      - Optimus2502.bin      # auto-run if you push a new .bin book
 
 jobs:
-  build-convert:
+  convert:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout your repo
-      uses: actions/checkout@v3
+    # 1 ▸ check out your repo (for Optimus2502.bin)
+    - uses: actions/checkout@v4
 
+    # 2 ▸ set up Python (3.12 is fine; pick any ≥3.9)
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    # 3 ▸ install python-chess (pure Python, no C build)
     - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential autoconf automake libtool
+      run: pip install --quiet 'chess>=1.10.0'
 
-    - name: Clone and build Polyglot
+    # 4 ▸ run an inline Python script that walks the book and writes a PGN
+    - name: Convert .bin → .pgn
       run: |
-        git clone https://github.com/ddugovic/polyglot.git "$HOME/polyglot"
-        cd "$HOME/polyglot"
-        autoreconf -fi
-        ./configure
-        make
+        python - <<'PY'
+        import chess, chess.polyglot, chess.pgn, itertools, pathlib, sys
 
-    - name: Convert Optimus2502.bin to PGN
-      run: |
-        mkdir -p converted
-        "$HOME/polyglot/polyglot" \
-          --binbook Optimus2502.bin \
-          --pgnout converted/Optimus2502.pgn \
-          --reverse
+        BIN  = pathlib.Path("Optimus2502.bin")
+        PGN  = pathlib.Path("Optimus2502.pgn")
+        MAX_PLY = 40          # stop a line after 40 half-moves (edit if you want deeper)
 
-    - name: Upload PGN file
-      uses: actions/upload-artifact@v4
+        if not BIN.exists():
+            sys.exit(f"❌ {BIN} not found in repository root")
+
+        # Depth-first walk of every line in the Polyglot tree
+        def dump_book(reader):
+            root = chess.Board()
+            stack = [(root, [])]           # (board, move_list)
+            while stack:
+                board, line = stack.pop()
+                entries = list(reader.find_all(board))
+                if not entries or len(line) >= MAX_PLY:
+                    yield line             # reached leaf or depth cap → emit a game
+                else:
+                    for e in entries[::-1]:   # reverse to keep original ordering
+                        b = board.copy(stack=False)
+                        b.push(e.move())
+                        stack.append((b, line + [e.move()]))
+
+        with chess.polyglot.open_reader(str(BIN)) as book, PGN.open("w", encoding="utf-8") as out:
+            for moves in dump_book(book):
+                game = chess.pgn.Game()
+                node = game
+                for mv in moves:
+                    node = node.add_variation(mv)
+                print(game, file=out, end="\n\n")
+
+        print(f"✅ Wrote {PGN.absolute()} with all lines up to {MAX_PLY} ply")
+        PY
+
+    # 5 ▸ upload the PGN so you can download it from the workflow page
+    - uses: actions/upload-artifact@v4
       with:
         name: Optimus2502.pgn
-        path: converted/Optimus2502.pgn
+        path: Optimus2502.pgn
