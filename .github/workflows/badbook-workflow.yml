@@ -4,34 +4,36 @@ name: Dump Optimus2502.bin to PGN
 on:
   push:
     paths:
-      - Optimus2502.bin        # run when the book itself changes
-  workflow_dispatch:           # …or when you press “Run workflow”
+      - Optimus2502.bin        # rebuild only when the book itself changes
+  workflow_dispatch:           # …or when you click “Run workflow”
 
 jobs:
   convert:
     runs-on: ubuntu-latest
 
     steps:
-    # 1 ▸ check out your repo
+    ## 1 ▸ Check out your repo
     - uses: actions/checkout@v4
 
-    # 2 ▸ install compiler tool-chain
+    ## 2 ▸ Install tool-chain and autotools helpers
     - name: Install build tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential git
+        sudo apt-get install -y build-essential git autoconf automake
 
-    # 3 ▸ clone Polyglot **(note: no /src folder any more)**
-    - name: Clone Polyglot source
+    ## 3 ▸ Clone PolyGlot
+    - name: Clone PolyGlot source
       run: |
         git clone --depth 1 https://github.com/ddugovic/polyglot.git "$HOME/polyglot"
 
-    # 4 ▸ build in the project root, not $HOME/polyglot/src
-    - name: Build Polyglot
+    ## 4 ▸ Configure & build (creates Makefile, then compiles)
+    - name: Build PolyGlot
       run: |
-        make -j"$(nproc)" -C "$HOME/polyglot"
+        cd "$HOME/polyglot"
+        ./configure        # generates Makefile ➜ required! 0
+        make -j"$(nproc)"
 
-    # 5 ▸ dump White and Black lines, then join them
+    ## 5 ▸ Dump White & Black repertoires and merge them
     - name: Convert .bin to .pgn
       run: |
         BIN_IN="Optimus2502.bin"
@@ -40,7 +42,7 @@ jobs:
         "$HOME/polyglot/polyglot" book dump -bin "$BIN_IN" -color black -out black.pgn
         cat white.pgn black.pgn > "$PGN_OUT"
 
-    # 6 ▸ upload the PGN as a workflow artifact
+    ## 6 ▸ Publish the PGN
     - uses: actions/upload-artifact@v4
       with:
         name: Optimus2502_PGN
