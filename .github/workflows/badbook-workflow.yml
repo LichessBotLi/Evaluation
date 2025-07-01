@@ -1,8 +1,8 @@
 name: Convert Optimus2502.bin to PGN
 
 on:
-  workflow_dispatch:          # manual trigger
-  push:                       # or auto when the .bin changes
+  workflow_dispatch:            # manual trigger
+  push:                          # auto-run when the .bin changes
     paths: [Optimus2502.bin]
 
 jobs:
@@ -28,44 +28,37 @@ jobs:
         OUT = pathlib.Path("Optimus2502.pgn")
 
         if not BIN.exists():
-            sys.exit("Book file Optimus2502.bin not found in repository root.")
+            sys.exit("❌ Optimus2502.bin not found in repo root.")
 
         reader = chess.polyglot.open_reader(str(BIN))
         root   = chess.Board()
 
-        with OUT.open("w", encoding="utf-8") as pgn:
-            # stack: (board, line, seen_hashes_iterator)
-            StackItem = collections.namedtuple("StackItem", "board line seen")
-            stack = [StackItem(root, [], {root.zobrist_hash()})]
+        # stack items: (board, line, seen_hashes)
+        Item = collections.namedtuple("Item", "board line seen")
+        stack = [Item(root, [], {root.transposition_key()})]
 
+        with OUT.open("w", encoding="utf-8") as pgn:
             while stack:
                 board, line, seen = stack.pop()
 
                 moves = list(reader.find_all(board))
-                if not moves:
-                    game = chess.pgn.Game()
-                    node = game
+                if not moves:                     # leaf → emit a game
+                    game, node = chess.pgn.Game(), None
                     for mv in line:
-                        node = node.add_variation(mv)
+                        node = game.add_variation(mv) if node is None else node.add_variation(mv)
                     print(game, file=pgn, end="\n\n")
                     continue
 
-                for entry in reversed(moves):
+                for entry in reversed(moves):     # keep original order
                     mv = entry.move
                     board.push(mv)
-                    zh = board.zobrist_hash()
-                    if zh not in seen:                 # cycle check
-                        stack.append(
-                            StackItem(
-                                board.copy(stack=False),
-                                line + [mv],
-                                seen | {zh}
-                            )
-                        )
+                    key = board.transposition_key()
+                    if key not in seen:           # cycle check
+                        stack.append(Item(board.copy(stack=False), line + [mv], seen | {key}))
                     board.pop()
 
         reader.close()
-        print(f"✅ PGN written to {OUT} (streamed; cycle-safe).")
+        print(f"✅ Finished – PGN saved to {OUT}")
         PY
 
     - name: Upload PGN
