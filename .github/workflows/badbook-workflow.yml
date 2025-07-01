@@ -1,68 +1,64 @@
 name: Convert Optimus2502.bin to PGN
 
 on:
-  workflow_dispatch:        # click “Run workflow” from the Actions tab
-  push:
+  workflow_dispatch:            # run manually
+  push:                          # or automatically when the book changes
     paths:
-      - Optimus2502.bin      # auto-run if you push a new .bin book
+      - Optimus2502.bin
 
 jobs:
   convert:
     runs-on: ubuntu-latest
 
     steps:
-    # 1 ▸ check out your repo (for Optimus2502.bin)
+    # 1 ▸ check out the repo so the .bin is available
     - uses: actions/checkout@v4
 
-    # 2 ▸ set up Python (3.12 is fine; pick any ≥3.9)
+    # 2 ▸ lightweight Python setup
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
 
-    # 3 ▸ install python-chess (pure Python, no C build)
-    - name: Install dependencies
+    # 3 ▸ install pure-Python dependency
+    - name: Install python-chess
       run: pip install --quiet 'chess>=1.10.0'
 
-    # 4 ▸ run an inline Python script that walks the book and writes a PGN
+    # 4 ▸ inline script: dump EVERY book line to PGN (no ply cap, no TypeError)
     - name: Convert .bin → .pgn
       run: |
         python - <<'PY'
-        import chess, chess.polyglot, chess.pgn, itertools, pathlib, sys
+        import chess, chess.polyglot, chess.pgn, pathlib, sys
 
-        BIN  = pathlib.Path("Optimus2502.bin")
-        PGN  = pathlib.Path("Optimus2502.pgn")
-        MAX_PLY = 40          # stop a line after 40 half-moves (edit if you want deeper)
+        BIN = pathlib.Path("Optimus2502.bin")
+        PGN = pathlib.Path("Optimus2502.pgn")
 
         if not BIN.exists():
-            sys.exit(f"❌ {BIN} not found in repository root")
+            sys.exit(f"❌ {BIN} not found. Make sure the file is in the repo root.")
 
-        # Depth-first walk of every line in the Polyglot tree
-        def dump_book(reader):
-            root = chess.Board()
-            stack = [(root, [])]           # (board, move_list)
-            while stack:
-                board, line = stack.pop()
-                entries = list(reader.find_all(board))
-                if not entries or len(line) >= MAX_PLY:
-                    yield line             # reached leaf or depth cap → emit a game
-                else:
-                    for e in entries[::-1]:   # reverse to keep original ordering
-                        b = board.copy(stack=False)
-                        b.push(e.move())
-                        stack.append((b, line + [e.move()]))
+        def walk(board, reader, line):
+            """Depth-first traversal of the Polyglot move tree."""
+            entries = list(reader.find_all(board))
+            if not entries:               # leaf → output this line
+                yield line
+            else:
+                for entry in entries:
+                    move = entry.move     # <-- fixed: .move is an attribute, not a method
+                    nxt = board.copy(stack=False)
+                    nxt.push(move)
+                    yield from walk(nxt, reader, line + [move])
 
         with chess.polyglot.open_reader(str(BIN)) as book, PGN.open("w", encoding="utf-8") as out:
-            for moves in dump_book(book):
+            for moves in walk(chess.Board(), book, []):
                 game = chess.pgn.Game()
                 node = game
                 for mv in moves:
                     node = node.add_variation(mv)
                 print(game, file=out, end="\n\n")
 
-        print(f"✅ Wrote {PGN.absolute()} with all lines up to {MAX_PLY} ply")
+        print(f"✅ Finished: wrote {PGN} with all book lines.")
         PY
 
-    # 5 ▸ upload the PGN so you can download it from the workflow page
+    # 5 ▸ upload result using the supported v4 action
     - uses: actions/upload-artifact@v4
       with:
         name: Optimus2502.pgn
