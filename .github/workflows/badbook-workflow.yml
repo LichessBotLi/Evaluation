@@ -1,8 +1,8 @@
 name: Convert Optimus2502.bin to PGN
 
 on:
-  workflow_dispatch:            # run manually
-  push:                          # or automatically when the book changes
+  workflow_dispatch:            # manual run button
+  push:                          # or auto-run when the book changes
     paths:
       - Optimus2502.bin
 
@@ -11,19 +11,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1 ▸ check out the repo so the .bin is available
+    # 1 ▸ get the .bin file from your repo
     - uses: actions/checkout@v4
 
-    # 2 ▸ lightweight Python setup
+    # 2 ▸ lightweight Python environment
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
 
-    # 3 ▸ install pure-Python dependency
+    # 3 ▸ pure-Python dependency (installs in a few seconds)
     - name: Install python-chess
       run: pip install --quiet 'chess>=1.10.0'
 
-    # 4 ▸ inline script: dump EVERY book line to PGN (no ply cap, no TypeError)
+    # 4 ▸ dump **all** lines – iterative stack, no recursion limit
     - name: Convert .bin → .pgn
       run: |
         python - <<'PY'
@@ -32,33 +32,37 @@ jobs:
         BIN = pathlib.Path("Optimus2502.bin")
         PGN = pathlib.Path("Optimus2502.pgn")
 
-        if not BIN.exists():
-            sys.exit(f"❌ {BIN} not found. Make sure the file is in the repo root.")
+        if not BIN.is_file():
+            sys.exit(f"❌ {BIN} not found in repo root.")
 
-        def walk(board, reader, line):
-            """Depth-first traversal of the Polyglot move tree."""
-            entries = list(reader.find_all(board))
-            if not entries:               # leaf → output this line
-                yield line
-            else:
-                for entry in entries:
-                    move = entry.move     # <-- fixed: .move is an attribute, not a method
-                    nxt = board.copy(stack=False)
-                    nxt.push(move)
-                    yield from walk(nxt, reader, line + [move])
+        # --- iterative depth-first traversal ---------------------------------
+        with chess.polyglot.open_reader(str(BIN)) as reader, PGN.open("w", encoding="utf-8") as out:
+            root = chess.Board()
+            stack = [(root, [])]                 # (board, move_list)
 
-        with chess.polyglot.open_reader(str(BIN)) as book, PGN.open("w", encoding="utf-8") as out:
-            for moves in walk(chess.Board(), book, []):
-                game = chess.pgn.Game()
-                node = game
-                for mv in moves:
-                    node = node.add_variation(mv)
-                print(game, file=out, end="\n\n")
+            while stack:
+                board, line = stack.pop()
 
-        print(f"✅ Finished: wrote {PGN} with all book lines.")
+                entries = list(reader.find_all(board))
+                if not entries:                  # reached a leaf → emit a PGN game
+                    game = chess.pgn.Game()
+                    node = game
+                    for mv in line:
+                        node = node.add_variation(mv)
+                    print(game, file=out, end="\n\n")
+                    continue
+
+                # push children onto the stack (reverse keeps original order)
+                for entry in entries[::-1]:
+                    mv = entry.move
+                    board.push(mv)
+                    stack.append((board.copy(stack=False), line + [mv]))
+                    board.pop()
+
+        print(f"✅ Wrote complete PGN to {PGN}")
         PY
 
-    # 5 ▸ upload result using the supported v4 action
+    # 5 ▸ upload result using the current v4 artifact action
     - uses: actions/upload-artifact@v4
       with:
         name: Optimus2502.pgn
