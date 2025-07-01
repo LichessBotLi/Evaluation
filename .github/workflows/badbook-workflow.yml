@@ -2,58 +2,46 @@
 name: Dump Optimus2502.bin to PGN
 
 on:
-  # Re-run it whenever the book changes or when you click “Run workflow”
   push:
     paths:
-      - Optimus2502.bin
-  workflow_dispatch:
+      - Optimus2502.bin        # run when the book itself changes
+  workflow_dispatch:           # …or when you press “Run workflow”
 
 jobs:
   convert:
     runs-on: ubuntu-latest
 
     steps:
-      # 1 ▸ check out your repo
-      - uses: actions/checkout@v4
+    # 1 ▸ check out your repo
+    - uses: actions/checkout@v4
 
-      # 2 ▸ install build tools & clone PolyGlot
-      - name: Install PolyGlot build deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential git
+    # 2 ▸ install compiler tool-chain
+    - name: Install build tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential git
 
-      - name: Clone PolyGlot source
-        run: |
-          git clone --depth 1 https://github.com/ddugovic/polyglot.git $HOME/polyglot
+    # 3 ▸ clone Polyglot **(note: no /src folder any more)**
+    - name: Clone Polyglot source
+      run: |
+        git clone --depth 1 https://github.com/ddugovic/polyglot.git "$HOME/polyglot"
 
-      # 3 ▸ build the utility (runs instantly ― it’s tiny)
-      - name: Build PolyGlot
-        run: |
-          make -C $HOME/polyglot/src -j$(nproc)
+    # 4 ▸ build in the project root, not $HOME/polyglot/src
+    - name: Build Polyglot
+      run: |
+        make -j"$(nproc)" -C "$HOME/polyglot"
 
-      # 4 ▸ dump the book for both colours and merge them
-      - name: Convert .bin to .pgn
-        run: |
-          PGN_OUT="Optimus2502.pgn"
-          BIN_IN="Optimus2502.bin"
-          $HOME/polyglot/src/polyglot dump-book -bin "$BIN_IN" -color white -out white.txt
-          $HOME/polyglot/src/polyglot dump-book -bin "$BIN_IN" -color black -out black.txt
-          # The dump tool writes “white.txt / black.txt”; just rename to *.pgn and concatenate
-          cat white.txt black.txt > "$PGN_OUT"
+    # 5 ▸ dump White and Black lines, then join them
+    - name: Convert .bin to .pgn
+      run: |
+        BIN_IN="Optimus2502.bin"
+        PGN_OUT="Optimus2502.pgn"
+        "$HOME/polyglot/polyglot" book dump -bin "$BIN_IN" -color white -out white.pgn
+        "$HOME/polyglot/polyglot" book dump -bin "$BIN_IN" -color black -out black.pgn
+        cat white.pgn black.pgn > "$PGN_OUT"
 
-      # 5 ▸ keep the result – choose one of the two upload methods:
-
-      # ► A. store as workflow artifact (safe, doesn’t dirty your repo)
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Optimus2502_PGN
-          path: Optimus2502.pgn
-
-      # ► B. or commit it back into the repository (uncomment if you prefer)
-      # - name: Commit PGN back
-      #   run: |
-      #     git config --global user.name "github-actions"
-      #     git config --global user.email "actions@github.com"
-      #     git add Optimus2502.pgn
-      #     git commit -m "Auto-generated PGN from Optimus2502.bin" || echo "No changes"
-      #     git push
+    # 6 ▸ upload the PGN as a workflow artifact
+    - uses: actions/upload-artifact@v4
+      with:
+        name: Optimus2502_PGN
+        path: Optimus2502.pgn
