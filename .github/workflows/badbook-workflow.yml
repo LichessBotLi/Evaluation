@@ -1,9 +1,10 @@
 name: Convert Optimus2502.bin to PGN
 
 on:
-  workflow_dispatch:            # manual trigger
-  push:                          # auto-run when the .bin changes
-    paths: [Optimus2502.bin]
+  workflow_dispatch:          # manual trigger
+  push:                       # auto-run when the book changes
+    paths:
+      - Optimus2502.bin
 
 jobs:
   convert:
@@ -19,7 +20,7 @@ jobs:
     - name: Install python-chess
       run: pip install --quiet 'chess>=1.10.0'
 
-    - name: Dump book to PGN (cycle-safe)
+    - name: Dump book to PGN (cycle-safe, no recursion)
       run: |
         python - <<'PY'
         import chess, chess.polyglot, chess.pgn, pathlib, sys, collections
@@ -33,32 +34,35 @@ jobs:
         reader = chess.polyglot.open_reader(str(BIN))
         root   = chess.Board()
 
-        # stack items: (board, line, seen_hashes)
+        # stack item: (board, move_list, seen_hashes)
         Item = collections.namedtuple("Item", "board line seen")
-        stack = [Item(root, [], {root.transposition_key()})]
+        stack = [Item(root, [], {root._transposition_key})]   # ← use the real attribute
 
         with OUT.open("w", encoding="utf-8") as pgn:
             while stack:
                 board, line, seen = stack.pop()
 
                 moves = list(reader.find_all(board))
-                if not moves:                     # leaf → emit a game
-                    game, node = chess.pgn.Game(), None
+                if not moves:                         # leaf → emit PGN game
+                    game = chess.pgn.Game()
+                    node = game
                     for mv in line:
-                        node = game.add_variation(mv) if node is None else node.add_variation(mv)
+                        node = node.add_variation(mv)
                     print(game, file=pgn, end="\n\n")
                     continue
 
-                for entry in reversed(moves):     # keep original order
+                for entry in reversed(moves):         # preserve order
                     mv = entry.move
                     board.push(mv)
-                    key = board.transposition_key()
-                    if key not in seen:           # cycle check
-                        stack.append(Item(board.copy(stack=False), line + [mv], seen | {key}))
+                    key = board._transposition_key    # ✔ cycle check
+                    if key not in seen:
+                        stack.append(Item(board.copy(stack=False),
+                                           line + [mv],
+                                           seen | {key}))
                     board.pop()
 
         reader.close()
-        print(f"✅ Finished – PGN saved to {OUT}")
+        print(f"✅ Finished – complete PGN saved to {OUT}")
         PY
 
     - name: Upload PGN
