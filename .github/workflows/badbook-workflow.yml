@@ -1,72 +1,69 @@
-name: Convert Optimus2502.bin to PGN
+name: Export PGN from Book
 
 on:
-  workflow_dispatch:          # manual trigger
-  push:                       # auto-run when the book changes
-    paths:
-      - Optimus2502.bin
+  workflow_dispatch:
 
 jobs:
-  convert:
+  export-pgn:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.12'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
 
-    - name: Install python-chess
-      run: pip install --quiet 'chess>=1.10.0'
+      - name: Install python-chess
+        run: pip install chess
 
-    - name: Dump book to PGN (cycle-safe, no recursion)
-      run: |
-        python - <<'PY'
-        import chess, chess.polyglot, chess.pgn, pathlib, sys, collections
+      - name: Create PGN export script
+        run: |
+          cat > export_pgn_from_book.py << 'EOF'
+          import chess
+          import chess.polyglot
+          import chess.pgn
+          import pathlib
+          import sys
 
-        BIN = pathlib.Path("Optimus2502.bin")
-        OUT = pathlib.Path("Optimus2502.pgn")
+          BIN = pathlib.Path("Optimus2502.bin")
+          PGN = pathlib.Path("Optimus2502.pgn")
+          MAX_DEPTH = 12  # Max number of half-moves (6 full moves)
 
-        if not BIN.exists():
-            sys.exit("❌ Optimus2502.bin not found in repo root.")
+          if not BIN.is_file():
+              sys.exit(f"❌ {BIN} not found in repo root.")
 
-        reader = chess.polyglot.open_reader(str(BIN))
-        root   = chess.Board()
+          with chess.polyglot.open_reader(str(BIN)) as reader, PGN.open("w", encoding="utf-8") as out:
+              root = chess.Board()
+              stack = [(root, [])]
 
-        # stack item: (board, move_list, seen_hashes)
-        Item = collections.namedtuple("Item", "board line seen")
-        stack = [Item(root, [], {root._transposition_key})]   # ← use the real attribute
+              while stack:
+                  board, line = stack.pop()
 
-        with OUT.open("w", encoding="utf-8") as pgn:
-            while stack:
-                board, line, seen = stack.pop()
+                  if len(line) >= MAX_DEPTH or not list(reader.find_all(board)):
+                      game = chess.pgn.Game()
+                      node = game
+                      for mv in line:
+                          node = node.add_variation(mv)
+                      print(game, file=out, end="\n\n")
+                      continue
 
-                moves = list(reader.find_all(board))
-                if not moves:                         # leaf → emit PGN game
-                    game = chess.pgn.Game()
-                    node = game
-                    for mv in line:
-                        node = node.add_variation(mv)
-                    print(game, file=pgn, end="\n\n")
-                    continue
+                  for entry in list(reader.find_all(board))[::-1]:
+                      mv = entry.move
+                      board.push(mv)
+                      stack.append((board.copy(stack=False), line + [mv]))
+                      board.pop()
 
-                for entry in reversed(moves):         # preserve order
-                    mv = entry.move
-                    board.push(mv)
-                    key = board._transposition_key    # ✔ cycle check
-                    if key not in seen:
-                        stack.append(Item(board.copy(stack=False),
-                                           line + [mv],
-                                           seen | {key}))
-                    board.pop()
+          print(f"✅ Wrote PGNs (up to {MAX_DEPTH} plies) to {PGN}")
+          EOF
 
-        reader.close()
-        print(f"✅ Finished – complete PGN saved to {OUT}")
-        PY
+      - name: Run PGN extraction
+        run: python export_pgn_from_book.py
 
-    - name: Upload PGN
-      uses: actions/upload-artifact@v4
-      with:
-        name: Optimus2502.pgn
-        path: Optimus2502.pgn
+      - name: Upload PGN artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: optimus2502-pgn
+          path: Optimus2502.pgn
