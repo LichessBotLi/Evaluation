@@ -1,69 +1,75 @@
 name: Convert Optimus2502.bin to PGN
 
 on:
-  workflow_dispatch:            # manual run button
-  push:                          # or auto-run when the book changes
-    paths:
-      - Optimus2502.bin
+  workflow_dispatch:          # manual trigger
+  push:                       # or auto when the .bin changes
+    paths: [Optimus2502.bin]
 
 jobs:
   convert:
     runs-on: ubuntu-latest
 
     steps:
-    # 1 ▸ get the .bin file from your repo
     - uses: actions/checkout@v4
 
-    # 2 ▸ lightweight Python environment
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
 
-    # 3 ▸ pure-Python dependency (installs in a few seconds)
     - name: Install python-chess
       run: pip install --quiet 'chess>=1.10.0'
 
-    # 4 ▸ dump **all** lines – iterative stack, no recursion limit
-    - name: Convert .bin → .pgn
+    - name: Dump book to PGN (cycle-safe)
       run: |
         python - <<'PY'
-        import chess, chess.polyglot, chess.pgn, pathlib, sys
+        import chess, chess.polyglot, chess.pgn, pathlib, sys, collections
 
         BIN = pathlib.Path("Optimus2502.bin")
-        PGN = pathlib.Path("Optimus2502.pgn")
+        OUT = pathlib.Path("Optimus2502.pgn")
 
-        if not BIN.is_file():
-            sys.exit(f"❌ {BIN} not found in repo root.")
+        if not BIN.exists():
+            sys.exit("Book file Optimus2502.bin not found in repository root.")
 
-        # --- iterative depth-first traversal ---------------------------------
-        with chess.polyglot.open_reader(str(BIN)) as reader, PGN.open("w", encoding="utf-8") as out:
-            root = chess.Board()
-            stack = [(root, [])]                 # (board, move_list)
+        reader = chess.polyglot.open_reader(str(BIN))
+        root   = chess.Board()
+
+        with OUT.open("w", encoding="utf-8") as pgn:
+            # stack: (board, line, seen_hashes_iterator)
+            StackItem = collections.namedtuple("StackItem", "board line seen")
+            stack = [StackItem(root, [], {root.zobrist_hash()})]
 
             while stack:
-                board, line = stack.pop()
+                board, line, seen = stack.pop()
 
-                entries = list(reader.find_all(board))
-                if not entries:                  # reached a leaf → emit a PGN game
+                moves = list(reader.find_all(board))
+                if not moves:
                     game = chess.pgn.Game()
                     node = game
                     for mv in line:
                         node = node.add_variation(mv)
-                    print(game, file=out, end="\n\n")
+                    print(game, file=pgn, end="\n\n")
                     continue
 
-                # push children onto the stack (reverse keeps original order)
-                for entry in entries[::-1]:
+                for entry in reversed(moves):
                     mv = entry.move
                     board.push(mv)
-                    stack.append((board.copy(stack=False), line + [mv]))
+                    zh = board.zobrist_hash()
+                    if zh not in seen:                 # cycle check
+                        stack.append(
+                            StackItem(
+                                board.copy(stack=False),
+                                line + [mv],
+                                seen | {zh}
+                            )
+                        )
                     board.pop()
 
-        print(f"✅ Wrote complete PGN to {PGN}")
+        reader.close()
+        print(f"✅ PGN written to {OUT} (streamed; cycle-safe).")
         PY
 
-    # 5 ▸ upload result using the current v4 artifact action
-    - uses: actions/upload-artifact@v4
+    - name: Upload PGN
+      uses: actions/upload-artifact@v4
       with:
         name: Optimus2502.pgn
         path: Optimus2502.pgn
