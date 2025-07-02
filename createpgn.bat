@@ -1,7 +1,7 @@
 @echo off
 
-call polyglot_tolerant dump-book -bin Optimus2502.bin -color white -out white-moves.txt
-call polyglot_tolerant dump-book -bin Optimus2502.bin -color black -out black-moves.txt
+polyglot_tolerant dump-book Optimus2502.bin white-moves.txt white
+polyglot_tolerant dump-book Optimus2502.bin black-moves.txt black
 
 call python convert-cerebellum.py
 
