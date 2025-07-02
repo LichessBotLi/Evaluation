@@ -1,9 +1,11 @@
 @echo off
 
-polyglot_tolerant dump-book Optimus2502.bin white-moves.txt white
-polyglot_tolerant dump-book Optimus2502.bin black-moves.txt black
+REM --- dump the book lines ------------------------------------
+polyglot_tolerant dump-book -bin Optimus2502.bin -color white -out white-moves.txt
+polyglot_tolerant dump-book -bin Optimus2502.bin -color black -out black-moves.txt
 
-call python convert-cerebellum.py
+REM --- convert to PGN ----------------------------------------
+python convert-cerebellum.py
 
 del white-moves.txt
 del black-moves.txt
