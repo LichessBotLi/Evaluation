@@ -1,0 +1,25 @@
+name: Convert Optimus2502.bin to PGN
+
+on:
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  convert:
+    runs-on: windows-latest  # Needed for .bat and .exe to work
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Run conversion script
+      shell: cmd
+      run: createpgn.bat
+
+    - name: Upload PGN files
+      uses: actions/upload-artifact@v4
+      with:
+        name: converted-pgns
+        path: |
+          cerebellum.pgn
+          cerebellum-white.pgn
+          cerebellum-black.pgn
