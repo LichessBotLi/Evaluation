@@ -1,15 +1,14 @@
 @echo off
 
-:: Set dummy engine
-set ENGINE_COMMAND=cmd.exe /c exit 0
+REM White book dump
+call polyglot_tolerant polyglot.ini dump-book -bin Optimus2502.bin -color white -out white-moves.txt
 
-:: Call PolyGlot Tolerant with dummy engine
-call polyglot_tolerant dump-book -bin Optimus2502.bin -color white -out white-moves.txt
-call polyglot_tolerant dump-book -bin Optimus2502.bin -color black -out black-moves.txt
+REM Black book dump
+call polyglot_tolerant polyglot.ini dump-book -bin Optimus2502.bin -color black -out black-moves.txt
 
-:: Convert to PGN
+REM Convert to PGNs
 call convert-cerebellum.py
 
-:: Cleanup
+REM Cleanup
 del white-moves.txt
 del black-moves.txt
